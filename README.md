@@ -41,7 +41,7 @@ A separate field encodes the total routine duration (e.g., 24 hours for a daily 
 
 
 
-## How Recall Works (src/sequence_recall.py)
+## How Recall Works (`src/sequence_recall.py`)
 
 Recall is an autonomous competitive process:
 
