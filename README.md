@@ -46,10 +46,10 @@ A separate field encodes the total routine duration (e.g., 24 hours for a daily 
 Recall is an autonomous competitive process:
 
 The Dynamics
-* Initialization: Load learned memory into prediction field u_dest_pred
-* Ramp mechanism: Threshold accommodation (h_u_dest) increases uniformly
+* Initialization: Load learned memory into prediction field `u_dest_pred`
+* Ramp mechanism: Threshold accommodation (`h_u_dest`) increases uniformly
 * Winner-take-all: Highest peak (earliest destination) crosses threshold first
-* Inhibition: Working memory field u_wm stores activated peak and inhibits that location
+* Inhibition: Working memory field `u_wm` stores activated peak and inhibits that location
 * Repeat: Next-highest peak now wins, process continues
 
 ```
