@@ -114,3 +114,90 @@ human_feedback = (FeedbackType.SWAP, "work", "gym")
 # Protect critical destination
 human_feedback = (FeedbackType.LOCK, "home")
 ```
+
+
+
+### Correction Examples
+
+ 
+---
+
+#### SKIP: Remove a Destination
+
+<p align="center">
+  <img src="docs/images/correction_skip.png" width="90%">
+</p>
+
+**Command:** *"skip gym"*
+
+**Mechanism:** SKIP field suppresses the gym peak to baseline level.
+
+**Result:** System no longer predicts gym visits. Routine: `coffee → work → gym → home` becomes `coffee → work → home`
+
+---
+
+#### EARLY: Predict Earlier Arrival
+
+<p align="center">
+  <img src="docs/images/correction_early.png" width="90%">
+</p>
+
+**Command:** *"arrive at work earlier"*
+
+**Mechanism:** EARLY field weakens work peak amplitude (3.85 → 3.35).
+
+**Result:** Lower amplitude → crosses threshold earlier in recall → predicts earlier arrival time.
+
+---
+
+#### LATE: Predict Later Arrival
+
+<p align="center">
+  <img src="docs/images/correction_late.png" width="90%">
+</p>
+
+**Command:** *"leave gym later"*
+
+**Mechanism:** LATE field strengthens gym peak amplitude (2.90 → 3.40).
+
+**Result:** Higher amplitude → crosses threshold later in recall → predicts later departure.
+
+---
+
+#### SWAP: Reverse Order
+
+<p align="center">
+  <img src="docs/images/correction_swap.png" width="90%">
+</p>
+
+**Command:** *"gym before work now"*
+
+**Mechanism:** SWAP field exchanges work ↔ gym peak amplitudes.
+
+**Result:** Routine: `coffee → work → gym → home` becomes `coffee → gym → work → home`
+
+---
+
+### LOCK: Protect Destination
+
+<p align="center">
+  <img src="docs/images/correction_lock.png" width="90%">
+</p>
+
+**Command:** *"always predict home last"*
+
+**Mechanism:** LOCK field creates a mask preventing future modifications at home location.
+
+**Result:** Home destination immune to SKIP/EARLY/LATE corrections (safety-critical preservation).
+
+---
+
+### Summary Table
+
+| Correction | Peak Amplitude Change | Recall Effect |
+|------------|----------------------|---------------|
+| **SKIP**   | → 0 (baseline)       | Not predicted |
+| **EARLY**  | ↓ (weaken)           | Fires earlier |
+| **LATE**   | ↑ (strengthen)       | Fires later   |
+| **SWAP**   | ↔ (exchange)         | Order reversed|
+| **LOCK**   | — (protected)        | Immutable     |
