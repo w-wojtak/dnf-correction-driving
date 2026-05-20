@@ -296,7 +296,7 @@ trigger_step = 100  # ~t=5, ~20% into feedback window
 # human_feedback = (FeedbackType.SKIP, "gym")
 
 # "I arrive at work earlier now"
-# human_feedback = (FeedbackType.EARLY, "work")
+human_feedback = (FeedbackType.EARLY, "work")
 
 # "I go to gym later on Mondays"
 # human_feedback = (FeedbackType.LATE, "gym")
@@ -305,7 +305,7 @@ trigger_step = 100  # ~t=5, ~20% into feedback window
 # human_feedback = (FeedbackType.LOCK, "home")
 
 # "I go to gym before work now, not after"
-human_feedback = (FeedbackType.SWAP, "work", "gym")
+# human_feedback = (FeedbackType.SWAP, "work", "gym")
 
 
 h_dmem_mask = np.ones(len(x))  # mask for locked destinations
