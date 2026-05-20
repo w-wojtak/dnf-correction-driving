@@ -125,7 +125,7 @@ human_feedback = (FeedbackType.LOCK, "home")
 #### SKIP: Remove a Destination
 
 <p align="center">
-  <img src="docs/images/correction_skip.png" width="90%">
+  <img src="images/correction_skip.png" width="90%">
 </p>
 
 **Command:** *"skip gym"*
@@ -139,7 +139,7 @@ human_feedback = (FeedbackType.LOCK, "home")
 #### EARLY: Predict Earlier Arrival
 
 <p align="center">
-  <img src="docs/images/correction_early.png" width="90%">
+  <img src="images/correction_early.png" width="90%">
 </p>
 
 **Command:** *"arrive at work earlier"*
@@ -153,7 +153,7 @@ human_feedback = (FeedbackType.LOCK, "home")
 #### LATE: Predict Later Arrival
 
 <p align="center">
-  <img src="docs/images/correction_late.png" width="90%">
+  <img src="images/correction_late.png" width="90%">
 </p>
 
 **Command:** *"leave gym later"*
@@ -167,7 +167,7 @@ human_feedback = (FeedbackType.LOCK, "home")
 #### SWAP: Reverse Order
 
 <p align="center">
-  <img src="docs/images/correction_swap.png" width="90%">
+  <img src="images/correction_swap.png" width="90%">
 </p>
 
 **Command:** *"gym before work now"*
@@ -181,7 +181,7 @@ human_feedback = (FeedbackType.LOCK, "home")
 ### LOCK: Protect Destination
 
 <p align="center">
-  <img src="docs/images/correction_lock.png" width="90%">
+  <img src="images/correction_lock.png" width="90%">
 </p>
 
 **Command:** *"always predict home last"*
