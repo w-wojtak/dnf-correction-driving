@@ -19,7 +19,7 @@ Time 3: Input at home location (x=30)
 **Key mechanism: Threshold Accommodation**
 
 * Each input creates a peak in the destination memory field
-* A threshold variable ``h increases continuously over time
+* A threshold variable `h` increases continuously over time
 * Earlier inputs accumulate more `h` → higher final peak
 * Result: activation gradient where peak height = temporal order
 
@@ -61,3 +61,56 @@ t=10.8: home peak crosses threshold    → "predict home arrival"
 
 The time between threshold crossings reflects the amplitude differences, which encode the original temporal structure.
 
+
+## Sequence Correction via Verbal Feedback (`src/sequence_tuning.py`)
+
+After learning a routine, the system can be **rapidly adapted** through natural language corrections without re-demonstration or waiting for new data accumulation.
+
+### Correction Mechanism
+
+Each correction type is implemented as a dedicated **feedback field** that evolves via DNF dynamics. When triggered (e.g., driver says *"skip gym"*), the field:
+
+1. Receives localized Gaussian input at the target destination's position
+2. Evolves autonomously following standard DNF dynamics
+3. Produces thresholded output defining the spatial region to modify
+4. Drives **structured, local modification** of the destination memory field
+
+This implements corrections through **field-mediated memory updates** rather than symbolic rules.
+
+### Correction Types
+
+| Command | Example | Effect on Memory | Result in Recall |
+|---------|---------|------------------|------------------|
+| **SKIP** | *"skip gym"* | Suppress peak → flatten activation | Destination not predicted |
+| **EARLY** | *"arrive at work earlier"* | Weaken peak → decrease amplitude | Recalls earlier in sequence |
+| **LATE** | *"leave gym later"* | Strengthen peak → increase amplitude | Recalls later in sequence |
+| **SWAP** | *"gym before work now"* | Exchange peak amplitudes | Reverses temporal order |
+| **LOCK** | *"always predict home last"* | Protect region from changes | Immune to future corrections |
+
+### Key Principles
+
+**Why this works:**
+
+- **Peak amplitude = temporal order**: Weakening a peak makes it fire earlier during recall's ramp-to-threshold dynamics
+- **Spatial locality**: Corrections affect only the targeted destination(s)
+- **Immediate effect**: No retraining—memory is directly modified, active next recall
+- **Composable**: Multiple corrections can be applied sequentially (e.g., LOCK home → SKIP gym → EARLY work)
+
+
+
+### Running Corrections
+```
+# In `src/sequence_tuning.py`, set desired feedback:
+
+# Skip a destination
+human_feedback = (FeedbackType.SKIP, "gym")
+
+# Adjust timing
+human_feedback = (FeedbackType.EARLY, "work")
+
+# Reorder sequence
+human_feedback = (FeedbackType.SWAP, "work", "gym")
+
+# Protect critical destination
+human_feedback = (FeedbackType.LOCK, "home")
+```
