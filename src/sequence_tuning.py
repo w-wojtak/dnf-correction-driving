@@ -220,14 +220,14 @@ early_late_coupling = 0.5  # small enough to keep peak above threshold
 def apply_early_from_field(u_dest_memory, early_field, theta_dest):
     """Weaken memory peak where early field is active → recalls earlier."""
     u_new = u_dest_memory.copy()
-    u_new -= early_late_coupling * early_field.output() * np.heaviside(u_dest_memory - theta_dest, 1.0)
+    u_new += early_late_coupling * early_field.output() * np.heaviside(u_dest_memory - theta_dest, 1.0)
     return u_new
 
 
 def apply_late_from_field(u_dest_memory, late_field, theta_dest):
     """Strengthen memory peak where late field is active → recalls later."""
     u_new = u_dest_memory.copy()
-    u_new += early_late_coupling * late_field.output() * np.heaviside(u_dest_memory - theta_dest, 1.0)
+    u_new -= early_late_coupling * late_field.output() * np.heaviside(u_dest_memory - theta_dest, 1.0)
     return u_new
 
 
@@ -299,10 +299,10 @@ trigger_step = 100  # ~t=5, ~20% into feedback window
 # human_feedback = (FeedbackType.EARLY, "work")
 
 # "I go to gym later on Mondays"
-# human_feedback = (FeedbackType.LATE, "gym")
+human_feedback = (FeedbackType.LATE, "gym")
 
 # "Always predict home as final destination"
-human_feedback = (FeedbackType.LOCK, "home")
+# human_feedback = (FeedbackType.LOCK, "home")
 
 # "I go to gym before work now, not after"
 # human_feedback = (FeedbackType.SWAP, "work", "gym")
@@ -315,7 +315,7 @@ h_dmem_mask = np.ones(len(x))  # mask for locked destinations
 # -------- Main experiment loop ------
 # ====================================
 
-for iteration in range(2):
+for iteration in range(1):
     print(f"\n{'='*60}")
     print(f"Week {iteration + 4} (Iteration {iteration + 1})")
     print(f"{'='*60}")
