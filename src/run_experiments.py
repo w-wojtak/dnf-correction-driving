@@ -101,8 +101,8 @@ if __name__ == "__main__":
     print("="*70)
     
     # Run quick test
-    quick_test()
+    # quick_test()
     
     # Uncomment to run other experiments:
-    # test_multiple_corrections()
+    test_multiple_corrections()
     # locality_experiment()
