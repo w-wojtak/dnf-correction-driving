@@ -7,19 +7,24 @@ import matplotlib.pyplot as plt
 from utils import *
 from dataclasses import dataclass
 from enum import Enum
+from llm_parser import LLMParser
+from dotenv import load_dotenv
+import os
 
+from feedback_types import FeedbackType
 
 # ====================================
 # -------- Human feedback ------------
 # ====================================
 
-class FeedbackType(Enum):
-    SKIP  = "skip"
-    LOCK  = "lock"
-    EARLY = "early"
-    LATE  = "late"
-    SWAP  = "swap"
-    # TODO: ADD = "add"
+# class FeedbackType(Enum):
+#     SKIP  = "skip"
+#     LOCK  = "lock"
+#     EARLY = "early"
+#     LATE  = "late"
+#     SWAP  = "swap"
+#     # TODO: ADD = "add"
+
 
 
 @dataclass
@@ -287,25 +292,75 @@ feedback_fields = {
 # -------- Experiment params ---------
 # ====================================
 
-t_feedback_lim = 30
-t_feedback = np.arange(0, t_feedback_lim + dt, dt)
-trigger_step = 100  # ~t=5, ~20% into feedback window
+# t_feedback_lim = 30
+# t_feedback = np.arange(0, t_feedback_lim + dt, dt)
+# trigger_step = 100  # ~t=5, ~20% into feedback window
 
-# Driver feedback examples:
-# "Skip gym on Mondays"
-# human_feedback = (FeedbackType.SKIP, "gym")
+# # Driver feedback examples:
+# # "Skip gym on Mondays"
+# # human_feedback = (FeedbackType.SKIP, "gym")
 
-# "I arrive at work earlier now"
+# # "I arrive at work earlier now"
 # human_feedback = (FeedbackType.EARLY, "work")
 
-# "I go to gym later on Mondays"
-human_feedback = (FeedbackType.LATE, "gym")
+# # "I go to gym later on Mondays"
+# # human_feedback = (FeedbackType.LATE, "gym")
 
-# "Always predict home as final destination"
-# human_feedback = (FeedbackType.LOCK, "home")
+# # "Always predict home as final destination"
+# # human_feedback = (FeedbackType.LOCK, "home")
 
-# "I go to gym before work now, not after"
-# human_feedback = (FeedbackType.SWAP, "work", "gym")
+# # "I go to gym before work now, not after"
+# # human_feedback = (FeedbackType.SWAP, "work", "gym")
+
+
+# ====================================
+# -------- Experiment params ---------
+# ====================================
+
+t_feedback_lim = 30
+t_feedback = np.arange(0, t_feedback_lim + dt, dt)
+trigger_step = 100
+
+# ====================================
+# -------- LLM Natural Language Input
+# ====================================
+
+# Load API key from .env file (not committed to git!)
+load_dotenv()
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", None)
+
+if GROQ_API_KEY:
+    print(f"✅ Loaded API key from .env file")
+else:
+    print(f"ℹ️ No API key found, using rule-based parser")
+
+# Initialize parser (set your Groq API key here or use None for rule-based)
+parser = LLMParser(api_key=GROQ_API_KEY, use_api=(GROQ_API_KEY is not None))
+
+# Natural language command from driver
+# user_command = "I arrive at work earlier now"
+user_command = "Skip gym on Mondays"
+# user_command = "I go to gym before work now"
+# user_command = "Always predict home as final destination"
+
+print(f"\n💬 Driver said: '{user_command}'")
+
+# Parse natural language to structured feedback
+parsed = parser.parse_command(user_command, destination_names)
+
+if parsed['feedback_type'] is None:
+    raise ValueError(f"Could not parse command: '{user_command}'")
+
+print(f"🤖 Parsed as: {parsed['feedback_type'].value.upper()}")
+print(f"   Target: {parsed['target']}")
+if parsed.get('target2'):
+    print(f"   Target2: {parsed['target2']}")
+
+# Convert to your existing tuple format
+if parsed['feedback_type'] == FeedbackType.SWAP:
+    human_feedback = (parsed['feedback_type'], parsed['target'], parsed['target2'])
+else:
+    human_feedback = (parsed['feedback_type'], parsed['target'])
 
 
 h_dmem_mask = np.ones(len(x))  # mask for locked destinations
