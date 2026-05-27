@@ -1,4 +1,8 @@
-# pylint: disable=C0200
+# sequence_tuning.py
+"""
+DNF-based sequence correction with natural language interface.
+Complete standalone implementation.
+"""
 
 from pathlib import Path
 from datetime import datetime
@@ -6,26 +10,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from utils import *
 from dataclasses import dataclass
-from enum import Enum
-from llm_parser import LLMParser
-from dotenv import load_dotenv
-import os
-
 from feedback_types import FeedbackType
 
+
 # ====================================
-# -------- Human feedback ------------
+# -------- Feedback Field Classes ----
 # ====================================
-
-# class FeedbackType(Enum):
-#     SKIP  = "skip"
-#     LOCK  = "lock"
-#     EARLY = "early"
-#     LATE  = "late"
-#     SWAP  = "swap"
-#     # TODO: ADD = "add"
-
-
 
 @dataclass
 class FeedbackFieldParams:
@@ -87,7 +77,7 @@ t = np.arange(0, t_lim + dt, dt)
 # ====================================
 
 PROJECT_ROOT = Path.cwd()
-results_dir  = PROJECT_ROOT / "results_driving_correction"
+results_dir = PROJECT_ROOT / "results_driving_correction"
 results_dir.mkdir(exist_ok=True)
 
 
@@ -142,7 +132,6 @@ try:
     h_d_initial = max(u_routine_duration)
     input_destination_onset = u_dest_memory_loaded.flatten()
     u_dest_memory = u_dest_memory_loaded.copy()
-
 except FileNotFoundError:
     print("No previous sequence memory found, initializing with default values.")
     h_d_initial = 3.2
@@ -185,14 +174,6 @@ def compute_convolution(u, theta, w_hat):
     return dx * np.fft.ifftshift(np.real(np.fft.ifft(f_hat * w_hat)))
 
 
-def reset_execution_fields(u_dest_memory, h_d_initial, x):
-    """Re-initialize execution fields from current memory."""
-    u_dest = u_dest_memory.copy() - h_d_initial + 1.5
-    u_wm = h_0_wm * np.ones(len(x))
-    h_u_dest = -h_d_initial * np.ones(len(x)) + 1.5
-    return u_dest, u_wm, h_u_dest
-
-
 def resolve_feedback(destination_name, destination_names, destination_positions):
     """Map destination name to spatial center."""
     idx = [n.lower() for n in destination_names].index(destination_name.lower())
@@ -220,7 +201,7 @@ def apply_lock_from_field(h_dmem_mask, lock_field):
     return mask_new
 
 
-early_late_coupling = 0.5  # small enough to keep peak above threshold
+early_late_coupling = 0.5
 
 def apply_early_from_field(u_dest_memory, early_field, theta_dest):
     """Weaken memory peak where early field is active → recalls earlier."""
@@ -241,7 +222,6 @@ def apply_swap_from_field(u_dest_memory, swap_field):
     u_new = u_dest_memory.copy()
     active = swap_field.output() > 0
 
-    # find two separate 1D regions in the binary output
     regions = []
     in_region = False
     start = 0
@@ -268,7 +248,10 @@ def apply_swap_from_field(u_dest_memory, swap_field):
 # -------- Feedback field setup ------
 # ====================================
 
-input_duration = 50  # steps, same for all feedback fields
+input_duration = 50
+t_feedback_lim = 30
+t_feedback = np.arange(0, t_feedback_lim + dt, dt)
+trigger_step = 100
 
 feedback_field_params = FeedbackFieldParams(
     kernel_type="gauss",
@@ -287,269 +270,341 @@ feedback_fields = {
     FeedbackType.SWAP:  FeedbackField(x, dx, feedback_field_params, input_duration),
 }
 
+h_dmem_mask = np.ones(len(x))
 
-# ====================================
-# -------- Experiment params ---------
-# ====================================
-
-# t_feedback_lim = 30
-# t_feedback = np.arange(0, t_feedback_lim + dt, dt)
-# trigger_step = 100  # ~t=5, ~20% into feedback window
-
-# # Driver feedback examples:
-# # "Skip gym on Mondays"
-# # human_feedback = (FeedbackType.SKIP, "gym")
-
-# # "I arrive at work earlier now"
-# human_feedback = (FeedbackType.EARLY, "work")
-
-# # "I go to gym later on Mondays"
-# # human_feedback = (FeedbackType.LATE, "gym")
-
-# # "Always predict home as final destination"
-# # human_feedback = (FeedbackType.LOCK, "home")
-
-# # "I go to gym before work now, not after"
-# # human_feedback = (FeedbackType.SWAP, "work", "gym")
 
 
 # ====================================
-# -------- Experiment params ---------
+# -------- Visualization -------------
 # ====================================
 
-t_feedback_lim = 30
-t_feedback = np.arange(0, t_feedback_lim + dt, dt)
-trigger_step = 100
-
-# ====================================
-# -------- LLM Natural Language Input
-# ====================================
-
-# Load API key from .env file (not committed to git!)
-load_dotenv()
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", None)
-
-if GROQ_API_KEY:
-    print(f"✅ Loaded API key from .env file")
-else:
-    print(f"ℹ️ No API key found, using rule-based parser")
-
-# Initialize parser (set your Groq API key here or use None for rule-based)
-parser = LLMParser(api_key=GROQ_API_KEY, use_api=(GROQ_API_KEY is not None))
-
-# Natural language command from driver
-# user_command = "I arrive at work earlier now"
-user_command = "Skip gym on Mondays"
-# user_command = "I go to gym before work now"
-# user_command = "Always predict home as final destination"
-
-print(f"\n💬 Driver said: '{user_command}'")
-
-# Parse natural language to structured feedback
-parsed = parser.parse_command(user_command, destination_names)
-
-if parsed['feedback_type'] is None:
-    raise ValueError(f"Could not parse command: '{user_command}'")
-
-print(f"🤖 Parsed as: {parsed['feedback_type'].value.upper()}")
-print(f"   Target: {parsed['target']}")
-if parsed.get('target2'):
-    print(f"   Target2: {parsed['target2']}")
-
-# Convert to your existing tuple format
-if parsed['feedback_type'] == FeedbackType.SWAP:
-    human_feedback = (parsed['feedback_type'], parsed['target'], parsed['target2'])
-else:
-    human_feedback = (parsed['feedback_type'], parsed['target'])
-
-
-h_dmem_mask = np.ones(len(x))  # mask for locked destinations
-
-
-# ====================================
-# -------- Main experiment loop ------
-# ====================================
-
-for iteration in range(1):
-    print(f"\n{'='*60}")
-    print(f"Week {iteration + 4} (Iteration {iteration + 1})")
-    print(f"{'='*60}")
-
-    # ── reset fields ──────────────────────────────────────────────────
-    u_dest, u_wm, h_u_dest = reset_execution_fields(u_dest_memory, h_d_initial, x)
-    h_u_wm = h_0_wm * np.ones(len(x))
-    reset_feedback_fields(feedback_fields)
-
-    u_dest_history = []
-    u_wm_history = []
-    active_ff_history = []   # history of the active feedback field only
-
-    # ── Loop 1: Execution ─────────────────────────────────────────────
-    print("\nPhase 1: Executing Monday routine (prediction)...")
-
-    for i in range(len(t)):
-        conv_dest = compute_convolution(u_dest, theta_dest, w_hat_dest)
-        conv_wm = compute_convolution(u_wm, theta_wm, w_hat_wm)
-        f_dest = np.heaviside(u_dest - theta_dest, 1)
-        f_wm = np.heaviside(u_wm - theta_wm, 1)
-
-        h_u_dest += dt / tau_h_dest
-
-        u_dest += dt * (-u_dest + conv_dest + input_destination_onset + h_u_dest - 6.0 * f_wm * conv_wm)
-        u_wm += (dt / 1.25) * (-u_wm + conv_wm + 8 * (f_dest * u_dest) + h_u_wm)
-
-        u_dest_history.append([u_dest[idx] for idx in destination_indices])
-        u_wm_history.append([u_wm[idx] for idx in destination_indices])
-
-    # ── Loop 2: Feedback window ───────────────────────────────────────
-    print("\nPhase 2: Driver provides feedback...")
-
-    feedback_type = human_feedback[0]
-    destination_name = human_feedback[1]
-    destination_center = resolve_feedback(destination_name, destination_names, destination_positions)
-    ff = feedback_fields[feedback_type]
-
-    # resolve second target for SWAP
-    target_name = None
-    target_center = None
-    if feedback_type == FeedbackType.SWAP:
-        target_name = human_feedback[2]
-        target_center = resolve_feedback(target_name, destination_names, destination_positions)
-
-    for i in range(len(t_feedback)):
-        if i == trigger_step:
-            print(f"  Driver says: '{feedback_type.value} {destination_name}'")
-            ff.inject(center=destination_center, amplitude=3.0, width=5.0, current_step=i)
-            if feedback_type == FeedbackType.SWAP:
-                print(f"  (swap with: {target_name})")
-                ff.inject_add(center=target_center, amplitude=3.0, width=5.0)
-
-        # update all feedback fields
-        for ftype, field in feedback_fields.items():
-            if (field.params.transient and
-                    field._inject_step is not None and
-                    i >= field._inject_step + field.input_duration):
-                field.clear_input()
-
-            conv_ff = compute_convolution(field.u, field.params.theta, field.w_hat)
-            field.u += (dt / field.params.tau) * (-field.u + conv_ff + field.h + field.s)
-
-        active_ff_history.append(ff.u.copy())
-
-    # ── Apply correction ──────────────────────────────────────────────
-    print("\nPhase 3: Applying correction to destination memory...")
-    u_dest_memory_before = u_dest_memory.copy()
-
-    if feedback_type == FeedbackType.SKIP:
-        u_dest_memory = apply_skip_from_field(u_dest_memory, feedback_fields[FeedbackType.SKIP])
-        print(f"  → {destination_name} removed from routine")
-    elif feedback_type == FeedbackType.LOCK:
-        h_dmem_mask = apply_lock_from_field(h_dmem_mask, feedback_fields[FeedbackType.LOCK])
-        print(f"  → {destination_name} locked (protected from future changes)")
-    elif feedback_type == FeedbackType.EARLY:
-        u_dest_memory = apply_early_from_field(u_dest_memory, feedback_fields[FeedbackType.EARLY], theta_dest)
-        print(f"  → {destination_name} peak weakened (will be recalled earlier)")
-    elif feedback_type == FeedbackType.LATE:
-        u_dest_memory = apply_late_from_field(u_dest_memory, feedback_fields[FeedbackType.LATE], theta_dest)
-        print(f"  → {destination_name} peak strengthened (will be recalled later)")
-    elif feedback_type == FeedbackType.SWAP:
-        u_dest_memory = apply_swap_from_field(u_dest_memory, feedback_fields[FeedbackType.SWAP])
-        print(f"  → {destination_name} ↔ {target_name} order reversed")
-
-    # ── Save ──────────────────────────────────────────────────────────
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    np.save(results_dir / f"u_dest_memory_week{iteration+4}_{timestamp}.npy", u_dest_memory)
-    np.save(results_dir / f"h_dmem_mask_week{iteration+4}_{timestamp}.npy", h_dmem_mask)
-
-    # Also save updated metadata
-    corrected_metadata = metadata.copy()
-    corrected_metadata['correction_applied'] = {
-        'type': feedback_type.value,
-        'destination': destination_name,
-        'week': iteration + 4
-    }
-    np.save(results_dir / f"metadata_week{iteration+4}_{timestamp}.npy", corrected_metadata)
-
-    # ── Plot ──────────────────────────────────────────────────────────
-    active_ff_history = np.array(active_ff_history)
-    target_idx = np.argmin(np.abs(x - destination_center))
-
+def plot_correction(u_before, u_after, ff, feedback_type, destination_name, 
+                   target_name=None, save_path=None):
+    """
+    Visualize the correction process.
+    
+    Args:
+        u_before: Memory field before correction
+        u_after: Memory field after correction
+        ff: FeedbackField that was used
+        feedback_type: FeedbackType enum
+        destination_name: Primary target destination
+        target_name: Secondary target (for SWAP)
+        save_path: Optional path to save figure
+    """
+    
+    fig, axs = plt.subplots(1, 3, figsize=(15, 4))
+    
     title_str = f"{feedback_type.value.upper()}: {destination_name}"
-    if feedback_type == FeedbackType.SWAP:
+    if target_name:
         title_str += f" ↔ {target_name}"
-
-    fig, axs = plt.subplots(1, 3, figsize=(14, 4))
-    fig.suptitle(f"Week {iteration + 4} — Driver A Monday — {title_str}", fontsize=13)
-
+    fig.suptitle(title_str, fontsize=14, fontweight='bold')
+    
     # Panel 1: Memory before/after
     for bucket_idx, color, name in zip(destination_buckets, destination_colors, destination_names):
-        axs[0].plot(x[bucket_idx], u_dest_memory_before[bucket_idx],
-                    '--', linewidth=2, color=color, alpha=0.6)
-        axs[0].plot(x[bucket_idx], u_dest_memory[bucket_idx],
-                    '-', linewidth=2.5, color=color, label=name)
+        axs[0].plot(x[bucket_idx], u_before[bucket_idx],
+                    '--', linewidth=2, color=color, alpha=0.6, label=f"{name} (before)")
+        axs[0].plot(x[bucket_idx], u_after[bucket_idx],
+                    '-', linewidth=2.5, color=color, label=f"{name} (after)")
     
     # Mark destinations
     for dest_pos, dest_name, color in zip(destination_positions, destination_names, destination_colors):
         axs[0].axvline(dest_pos, color=color, linestyle=':', alpha=0.3)
     
-    axs[0].set_title("Destination Memory: before (--) vs after (-)")
-    axs[0].set_xlabel("Destination space (x)")
-    axs[0].set_ylabel("Memory activation")
-    axs[0].legend(loc="upper right")
+    axs[0].axhline(theta_dest, color='k', linestyle='--', alpha=0.3, label='threshold')
+    axs[0].set_title("Memory Field: Before vs After")
+    axs[0].set_xlabel("Spatial position (x)")
+    axs[0].set_ylabel("Activation")
+    axs[0].legend(loc='upper right', fontsize=8)
     axs[0].grid(True, alpha=0.3)
-
-    # Panel 2: Feedback field at target location over time
-    axs[1].plot(t_feedback[:len(active_ff_history)], active_ff_history[:, target_idx], 
-                label=f"{feedback_type.value} field", linewidth=2, color='purple')
-    axs[1].axhline(feedback_field_params.theta, color='k', linestyle='--', 
-                   linewidth=1, label='threshold', alpha=0.5)
-    axs[1].axvline(trigger_step * dt, color='r', linestyle='--', 
-                   linewidth=1, label='feedback given', alpha=0.7)
-    axs[1].set_title(f"{feedback_type.value.upper()} field at {destination_name}")
-    axs[1].set_xlabel("Feedback window time")
-    axs[1].set_ylabel("Field activation")
-    axs[1].legend()
-    axs[1].grid(True, alpha=0.3)
-
-    # Panel 3: Feedback field spatial profile at end
-    axs[2].plot(x, ff.u, label="Field activation", linewidth=2, color='purple')
-    axs[2].plot(x, ff.output(), linestyle='--', linewidth=2, 
-                label="Thresholded output", color='orange')
-    axs[2].axhline(feedback_field_params.theta, color='k', linestyle='--', 
-                   linewidth=1, label='threshold', alpha=0.5)
-    axs[2].axvline(destination_center, color='gray', linestyle=':', 
+    
+    # Panel 2: Feedback field spatial profile
+    axs[1].plot(x, ff.u, linewidth=2, color='purple', label='Field activation')
+    axs[1].plot(x, ff.output(), linestyle='--', linewidth=2, 
+                color='orange', label='Thresholded output')
+    axs[1].axhline(ff.params.theta, color='k', linestyle='--', 
+                   linewidth=1, alpha=0.5, label='threshold')
+    
+    # Mark target destination(s)
+    target_center = resolve_feedback(destination_name, destination_names, destination_positions)
+    axs[1].axvline(target_center, color='red', linestyle=':', 
                    linewidth=2, label=destination_name)
     
-    if feedback_type == FeedbackType.SWAP:
-        axs[2].axvline(target_center, color='orange', linestyle=':', 
+    if target_name:
+        target2_center = resolve_feedback(target_name, destination_names, destination_positions)
+        axs[1].axvline(target2_center, color='orange', linestyle=':', 
                        linewidth=2, label=target_name)
     
-    # Mark all destinations
+    # Mark all destinations faintly
     for dest_pos in destination_positions:
-        if dest_pos != destination_center and (feedback_type != FeedbackType.SWAP or dest_pos != target_center):
-            axs[2].axvline(dest_pos, color='lightgray', linestyle=':', alpha=0.3)
+        if dest_pos != target_center and (not target_name or dest_pos != target2_center):
+            axs[1].axvline(dest_pos, color='lightgray', linestyle=':', alpha=0.3)
     
-    axs[2].set_title(f"{feedback_type.value.upper()} field spatial profile")
-    axs[2].set_xlabel("Destination space (x)")
-    axs[2].set_ylabel("Activation")
-    axs[2].legend(fontsize=9)
-    axs[2].grid(True, alpha=0.3)
-
+    axs[1].set_title(f"{feedback_type.value.upper()} Feedback Field")
+    axs[1].set_xlabel("Spatial position (x)")
+    axs[1].set_ylabel("Activation")
+    axs[1].legend(fontsize=9)
+    axs[1].grid(True, alpha=0.3)
+    
+    # Panel 3: Memory amplitude comparison (bar chart)
+    dest_names_short = destination_names
+    before_amps = [u_before[idx] for idx in destination_indices]
+    after_amps = [u_after[idx] for idx in destination_indices]
+    
+    x_pos = np.arange(len(dest_names_short))
+    width = 0.35
+    
+    bars1 = axs[2].bar(x_pos - width/2, before_amps, width, 
+                       label='Before', color='gray', alpha=0.6)
+    bars2 = axs[2].bar(x_pos + width/2, after_amps, width, 
+                       label='After', color='blue', alpha=0.8)
+    
+    axs[2].axhline(theta_dest, color='k', linestyle='--', alpha=0.3, label='threshold')
+    axs[2].set_xlabel('Destination')
+    axs[2].set_ylabel('Peak Amplitude')
+    axs[2].set_title('Memory Peak Comparison')
+    axs[2].set_xticks(x_pos)
+    axs[2].set_xticklabels(dest_names_short)
+    axs[2].legend()
+    axs[2].grid(True, alpha=0.3, axis='y')
+    
+    # Add value labels on bars
+    for bars in [bars1, bars2]:
+        for bar in bars:
+            height = bar.get_height()
+            axs[2].text(bar.get_x() + bar.get_width()/2., height,
+                       f'{height:.2f}',
+                       ha='center', va='bottom', fontsize=8)
+    
     plt.tight_layout()
-    plt.savefig(results_dir / f"correction_week{iteration+4}_{timestamp}.png", dpi=150)
+    
+    if save_path:
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        print(f"   💾 Saved plot to {save_path}")
+    
     plt.show()
 
-    # ── Analysis ──────────────────────────────────────────────────────
-    print("\nMemory peak analysis:")
+
+# ====================================
+# -------- Natural Language Experiments
+# ====================================
+
+if __name__ == "__main__":
+    from llm_parser import LLMParser
+    from dotenv import load_dotenv
+    import os
+    
+    # Load API key from .env
+    load_dotenv()
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", None)
+    
+    print("\n" + "="*70)
+    print("NATURAL LANGUAGE DNF CORRECTION")
+    print("="*70)
+    
+    if GROQ_API_KEY:
+        print("✅ Using Groq API (Llama 3.1)")
+    else:
+        print("ℹ️  Using rule-based parser")
+    
+    # ========================================================================
+    # EDIT THESE COMMANDS TO TEST DIFFERENT CORRECTIONS
+    # ========================================================================
+    
+    user_commands = [
+        "Skip gym on Mondays",
+        # "I go to gym before work now",
+        # "I arrive at work earlier now",
+        # "Always keep home as my last stop",
+        # "I leave work later these days",
+    ]
+    
+    # ========================================================================
+    # Process each command
+    # ========================================================================
+    
+    for cmd_idx, user_command in enumerate(user_commands):
+        print(f"\n{'='*70}")
+        print(f"COMMAND {cmd_idx + 1}/{len(user_commands)}")
+        print(f"{'='*70}")
+        print(f"💬 User: '{user_command}'")
+        
+        # Initialize parser
+        parser = LLMParser(api_key=GROQ_API_KEY, use_api=(GROQ_API_KEY is not None))
+        
+        # Parse natural language
+        parsed = parser.parse_command(user_command, destination_names)
+        
+        if parsed['feedback_type'] is None:
+            print(f"❌ Could not parse command, skipping")
+            continue
+        
+        print(f"🤖 Parsed: {parsed['feedback_type'].value.upper()}")
+        print(f"   Target: {parsed['target']}")
+        if parsed.get('target2'):
+            print(f"   Target2: {parsed['target2']}")
+        
+        # Convert to tuple format
+        if parsed['feedback_type'] == FeedbackType.SWAP:
+            human_feedback = (parsed['feedback_type'], parsed['target'], parsed['target2'])
+        else:
+            human_feedback = (parsed['feedback_type'], parsed['target'])
+        
+        # Extract feedback info
+        feedback_type = human_feedback[0]
+        destination_name = human_feedback[1]
+        destination_center = resolve_feedback(destination_name, destination_names, destination_positions)
+        ff = feedback_fields[feedback_type]
+        
+        # Handle SWAP second target
+        target_name = None
+        target_center = None
+        if feedback_type == FeedbackType.SWAP:
+            target_name = human_feedback[2]
+            target_center = resolve_feedback(target_name, destination_names, destination_positions)
+        
+        # Run feedback field dynamics
+        print(f"\n⚙️  Running feedback field dynamics...")
+        for i in range(len(t_feedback)):
+            if i == trigger_step:
+                ff.inject(center=destination_center, amplitude=3.0, width=5.0, current_step=i)
+                if feedback_type == FeedbackType.SWAP:
+                    ff.inject_add(center=target_center, amplitude=3.0, width=5.0)
+            
+            # Update all feedback fields
+            for ftype, field in feedback_fields.items():
+                if (field.params.transient and
+                        field._inject_step is not None and
+                        i >= field._inject_step + field.input_duration):
+                    field.clear_input()
+                
+                conv_ff = compute_convolution(field.u, field.params.theta, field.w_hat)
+                field.u += (dt / field.params.tau) * (-field.u + conv_ff + field.h + field.s)
+        
+        # Apply correction to memory
+        print(f"✏️  Applying correction to memory...")
+        u_dest_memory_before = u_dest_memory.copy()
+        
+        if feedback_type == FeedbackType.SKIP:
+            u_dest_memory = apply_skip_from_field(u_dest_memory, feedback_fields[FeedbackType.SKIP])
+            print(f"   → Removed {destination_name} from routine")
+            
+        elif feedback_type == FeedbackType.LOCK:
+            h_dmem_mask = apply_lock_from_field(h_dmem_mask, feedback_fields[FeedbackType.LOCK])
+            print(f"   → Locked {destination_name} (protected from changes)")
+            
+        elif feedback_type == FeedbackType.EARLY:
+            u_dest_memory = apply_early_from_field(u_dest_memory, feedback_fields[FeedbackType.EARLY], theta_dest)
+            print(f"   → {destination_name} peak strengthened (will recall earlier)")
+            
+        elif feedback_type == FeedbackType.LATE:
+            u_dest_memory = apply_late_from_field(u_dest_memory, feedback_fields[FeedbackType.LATE], theta_dest)
+            print(f"   → {destination_name} peak weakened (will recall later)")
+            
+        elif feedback_type == FeedbackType.SWAP:
+            u_dest_memory = apply_swap_from_field(u_dest_memory, feedback_fields[FeedbackType.SWAP])
+            print(f"   → Swapped {destination_name} ↔ {target_name}")
+        
+        # Reset feedback field
+        ff.clear_input()
+        ff.u = ff.params.h_0 * np.ones(len(x))
+
+
+                # Apply correction to memory
+        print(f"✏️  Applying correction to memory...")
+        u_dest_memory_before = u_dest_memory.copy()
+        
+        if feedback_type == FeedbackType.SKIP:
+            u_dest_memory = apply_skip_from_field(u_dest_memory, feedback_fields[FeedbackType.SKIP])
+            print(f"   → Removed {destination_name} from routine")
+            
+        elif feedback_type == FeedbackType.LOCK:
+            h_dmem_mask = apply_lock_from_field(h_dmem_mask, feedback_fields[FeedbackType.LOCK])
+            print(f"   → Locked {destination_name} (protected from changes)")
+            
+        elif feedback_type == FeedbackType.EARLY:
+            u_dest_memory = apply_early_from_field(u_dest_memory, feedback_fields[FeedbackType.EARLY], theta_dest)
+            print(f"   → {destination_name} peak strengthened (will recall earlier)")
+            
+        elif feedback_type == FeedbackType.LATE:
+            u_dest_memory = apply_late_from_field(u_dest_memory, feedback_fields[FeedbackType.LATE], theta_dest)
+            print(f"   → {destination_name} peak weakened (will recall later)")
+            
+        elif feedback_type == FeedbackType.SWAP:
+            u_dest_memory = apply_swap_from_field(u_dest_memory, feedback_fields[FeedbackType.SWAP])
+            print(f"   → Swapped {destination_name} ↔ {target_name}")
+        
+        # Reset feedback field
+        ff.clear_input()
+        ff.u = ff.params.h_0 * np.ones(len(x))
+        
+        # Show memory changes
+        print(f"\n📊 Memory changes:")
+        for i, (dest_name, dest_pos) in enumerate(zip(destination_names, destination_positions)):
+            idx = destination_indices[i]
+            amp_before = u_dest_memory_before[idx]
+            amp_after = u_dest_memory[idx]
+            change = amp_after - amp_before
+            
+            if abs(change) > 1e-6:
+                print(f"   {dest_name:8s}: {amp_before:.3f} → {amp_after:.3f} (Δ {change:+.3f}) ⚠️")
+            else:
+                print(f"   {dest_name:8s}: {amp_before:.3f} → {amp_after:.3f} (Δ {change:+.3f})")
+        
+        # ============================================================
+        # ADD THIS: Plot the correction
+        # ============================================================
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        print(f"\n📈 Generating visualization...")
+        save_path = results_dir / f"correction_cmd{cmd_idx+1}_{feedback_type.value}_{timestamp}.png"
+        plot_correction(
+            u_before=u_dest_memory_before,
+            u_after=u_dest_memory,
+            ff=ff,
+            feedback_type=feedback_type,
+            destination_name=destination_name,
+            target_name=target_name,
+            save_path=save_path
+        )
+        # ============================================================
+        
+        # Save state
+
+        np.save(results_dir / f"u_dest_memory_cmd{cmd_idx+1}_{timestamp}.npy", u_dest_memory)
+        np.save(results_dir / f"h_dmem_mask_cmd{cmd_idx+1}_{timestamp}.npy", h_dmem_mask)
+        
+        # # Show memory changes
+        # print(f"\n📊 Memory changes:")
+        # for i, (dest_name, dest_pos) in enumerate(zip(destination_names, destination_positions)):
+        #     idx = destination_indices[i]
+        #     amp_before = u_dest_memory_before[idx]
+        #     amp_after = u_dest_memory[idx]
+        #     change = amp_after - amp_before
+            
+        #     if abs(change) > 1e-6:
+        #         print(f"   {dest_name:8s}: {amp_before:.3f} → {amp_after:.3f} (Δ {change:+.3f}) ⚠️")
+        #     else:
+        #         print(f"   {dest_name:8s}: {amp_before:.3f} → {amp_after:.3f} (Δ {change:+.3f})")
+
+
+
+        
+        
+        # Save state
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        np.save(results_dir / f"u_dest_memory_cmd{cmd_idx+1}_{timestamp}.npy", u_dest_memory)
+        np.save(results_dir / f"h_dmem_mask_cmd{cmd_idx+1}_{timestamp}.npy", h_dmem_mask)
+    
+    # Final summary
+    print(f"\n{'='*70}")
+    print(f"✅ All {len(user_commands)} corrections complete!")
+    print(f"{'='*70}")
+    print(f"\nFinal routine state:")
     for i, (dest_name, dest_pos) in enumerate(zip(destination_names, destination_positions)):
         idx = destination_indices[i]
-        amp_before = u_dest_memory_before[idx]
-        amp_after = u_dest_memory[idx]
-        change = amp_after - amp_before
-        
-        print(f"  {dest_name:8s}: {amp_before:.3f} → {amp_after:.3f} "
-              f"(change: {change:+.3f})")
-
-print("\n" + "="*60)
-print("All correction iterations complete!")
-print("="*60)
+        amp = u_dest_memory[idx]
+        if amp > theta_dest:
+            print(f"  ✓ {dest_name:8s}: amplitude {amp:.3f}")
+        else:
+            print(f"  ✗ {dest_name:8s}: amplitude {amp:.3f} (removed)")
