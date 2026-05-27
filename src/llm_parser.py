@@ -10,7 +10,8 @@ from enum import Enum
 from dataclasses import dataclass
 
 # Import your existing FeedbackType from correction.py
-from correction import FeedbackType  # ← Use your existing enum
+# from correction import FeedbackType  # ← Use your existing enum
+from sequence_tuning import FeedbackType
 
 
 class LLMParser:
