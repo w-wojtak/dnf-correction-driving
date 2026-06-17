@@ -412,11 +412,13 @@ if __name__ == "__main__":
     # ========================================================================
     
     user_commands = [
-        "Skip gym on Mondays",
+        # "Skip gym on Mondays",
+        "I won't go to the gym anymore",
         # "I go to gym before work now",
         # "I arrive at work earlier now",
-        # "Always keep home as my last stop",
-        # "I leave work later these days",
+        # "I arrive at work later now",
+        # "I arrive at the gym later now",
+        # "Swap order of work and gym",
     ]
     
     # ========================================================================
@@ -510,33 +512,6 @@ if __name__ == "__main__":
         ff.u = ff.params.h_0 * np.ones(len(x))
 
 
-                # Apply correction to memory
-        print(f"✏️  Applying correction to memory...")
-        u_dest_memory_before = u_dest_memory.copy()
-        
-        if feedback_type == FeedbackType.SKIP:
-            u_dest_memory = apply_skip_from_field(u_dest_memory, feedback_fields[FeedbackType.SKIP])
-            print(f"   → Removed {destination_name} from routine")
-            
-        elif feedback_type == FeedbackType.LOCK:
-            h_dmem_mask = apply_lock_from_field(h_dmem_mask, feedback_fields[FeedbackType.LOCK])
-            print(f"   → Locked {destination_name} (protected from changes)")
-            
-        elif feedback_type == FeedbackType.EARLY:
-            u_dest_memory = apply_early_from_field(u_dest_memory, feedback_fields[FeedbackType.EARLY], theta_dest)
-            print(f"   → {destination_name} peak strengthened (will recall earlier)")
-            
-        elif feedback_type == FeedbackType.LATE:
-            u_dest_memory = apply_late_from_field(u_dest_memory, feedback_fields[FeedbackType.LATE], theta_dest)
-            print(f"   → {destination_name} peak weakened (will recall later)")
-            
-        elif feedback_type == FeedbackType.SWAP:
-            u_dest_memory = apply_swap_from_field(u_dest_memory, feedback_fields[FeedbackType.SWAP])
-            print(f"   → Swapped {destination_name} ↔ {target_name}")
-        
-        # Reset feedback field
-        ff.clear_input()
-        ff.u = ff.params.h_0 * np.ones(len(x))
         
         # Show memory changes
         print(f"\n📊 Memory changes:")
@@ -591,10 +566,10 @@ if __name__ == "__main__":
 
         
         
-        # Save state
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        np.save(results_dir / f"u_dest_memory_cmd{cmd_idx+1}_{timestamp}.npy", u_dest_memory)
-        np.save(results_dir / f"h_dmem_mask_cmd{cmd_idx+1}_{timestamp}.npy", h_dmem_mask)
+        # # Save state
+        # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # np.save(results_dir / f"u_dest_memory_cmd{cmd_idx+1}_{timestamp}.npy", u_dest_memory)
+        # np.save(results_dir / f"h_dmem_mask_cmd{cmd_idx+1}_{timestamp}.npy", h_dmem_mask)
     
     # Final summary
     print(f"\n{'='*70}")
