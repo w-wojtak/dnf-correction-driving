@@ -278,110 +278,73 @@ h_dmem_mask = np.ones(len(x))
 # -------- Visualization -------------
 # ====================================
 
-def plot_correction(u_before, u_after, ff, feedback_type, destination_name, 
+def plot_correction(u_before, u_after, ff, feedback_type, destination_name,
+                   ff_history=None, ff_timesteps=None,
                    target_name=None, save_path=None):
     """
     Visualize the correction process.
-    
+
     Args:
         u_before: Memory field before correction
         u_after: Memory field after correction
         ff: FeedbackField that was used
         feedback_type: FeedbackType enum
         destination_name: Primary target destination
+        ff_history: array of shape (timesteps, n_destinations) — feedback field
+            activation at each destination index over time
+        ff_timesteps: array of simulation times corresponding to ff_history rows
         target_name: Secondary target (for SWAP)
         save_path: Optional path to save figure
     """
-    
-    fig, axs = plt.subplots(1, 3, figsize=(15, 4))
-    
+
+    fig, axs = plt.subplots(1, 2, figsize=(11, 4))
+
     title_str = f"{feedback_type.value.upper()}: {destination_name}"
     if target_name:
         title_str += f" ↔ {target_name}"
     fig.suptitle(title_str, fontsize=14, fontweight='bold')
-    
+
     # Panel 1: Memory before/after
     for bucket_idx, color, name in zip(destination_buckets, destination_colors, destination_names):
         axs[0].plot(x[bucket_idx], u_before[bucket_idx],
                     '--', linewidth=2, color=color, alpha=0.6, label=f"{name} (before)")
         axs[0].plot(x[bucket_idx], u_after[bucket_idx],
                     '-', linewidth=2.5, color=color, label=f"{name} (after)")
-    
+
     # Mark destinations
     for dest_pos, dest_name, color in zip(destination_positions, destination_names, destination_colors):
         axs[0].axvline(dest_pos, color=color, linestyle=':', alpha=0.3)
-    
+
     axs[0].axhline(theta_dest, color='k', linestyle='--', alpha=0.3, label='threshold')
     axs[0].set_title("Memory Field: Before vs After")
     axs[0].set_xlabel("Spatial position (x)")
     axs[0].set_ylabel("Activation")
     axs[0].legend(loc='upper right', fontsize=8)
     axs[0].grid(True, alpha=0.3)
-    
-    # Panel 2: Feedback field spatial profile
-    axs[1].plot(x, ff.u, linewidth=2, color='purple', label='Field activation')
-    axs[1].plot(x, ff.output(), linestyle='--', linewidth=2, 
-                color='orange', label='Thresholded output')
-    axs[1].axhline(ff.params.theta, color='k', linestyle='--', 
-                   linewidth=1, alpha=0.5, label='threshold')
-    
-    # Mark target destination(s)
-    target_center = resolve_feedback(destination_name, destination_names, destination_positions)
-    axs[1].axvline(target_center, color='red', linestyle=':', 
-                   linewidth=2, label=destination_name)
-    
-    if target_name:
-        target2_center = resolve_feedback(target_name, destination_names, destination_positions)
-        axs[1].axvline(target2_center, color='orange', linestyle=':', 
-                       linewidth=2, label=target_name)
-    
-    # Mark all destinations faintly
-    for dest_pos in destination_positions:
-        if dest_pos != target_center and (not target_name or dest_pos != target2_center):
-            axs[1].axvline(dest_pos, color='lightgray', linestyle=':', alpha=0.3)
-    
-    axs[1].set_title(f"{feedback_type.value.upper()} Feedback Field")
-    axs[1].set_xlabel("Spatial position (x)")
-    axs[1].set_ylabel("Activation")
-    axs[1].legend(fontsize=9)
-    axs[1].grid(True, alpha=0.3)
-    
-    # Panel 3: Memory amplitude comparison (bar chart)
-    dest_names_short = destination_names
-    before_amps = [u_before[idx] for idx in destination_indices]
-    after_amps = [u_after[idx] for idx in destination_indices]
-    
-    x_pos = np.arange(len(dest_names_short))
-    width = 0.35
-    
-    bars1 = axs[2].bar(x_pos - width/2, before_amps, width, 
-                       label='Before', color='gray', alpha=0.6)
-    bars2 = axs[2].bar(x_pos + width/2, after_amps, width, 
-                       label='After', color='blue', alpha=0.8)
-    
-    axs[2].axhline(theta_dest, color='k', linestyle='--', alpha=0.3, label='threshold')
-    axs[2].set_xlabel('Destination')
-    axs[2].set_ylabel('Peak Amplitude')
-    axs[2].set_title('Memory Peak Comparison')
-    axs[2].set_xticks(x_pos)
-    axs[2].set_xticklabels(dest_names_short)
-    axs[2].legend()
-    axs[2].grid(True, alpha=0.3, axis='y')
-    
-    # Add value labels on bars
-    for bars in [bars1, bars2]:
-        for bar in bars:
-            height = bar.get_height()
-            axs[2].text(bar.get_x() + bar.get_width()/2., height,
-                       f'{height:.2f}',
-                       ha='center', va='bottom', fontsize=8)
-    
+
+    # Panel 2: Feedback field time course at each destination
+    if ff_history is not None and ff_timesteps is not None:
+        for i, (dest_name, color) in enumerate(zip(destination_names, destination_colors)):
+            axs[1].plot(ff_timesteps, ff_history[:, i],
+                        linewidth=2, color=color, label=dest_name)
+        axs[1].axhline(ff.params.theta, color='k', linestyle='--',
+                       linewidth=1, alpha=0.5, label='threshold')
+        axs[1].set_xlabel("Simulation Time")
+        axs[1].set_ylabel("Activation")
+        axs[1].set_title(f"{feedback_type.value.upper()} Feedback Field - Time Course")
+        axs[1].legend(fontsize=8, loc='upper left')
+        axs[1].grid(True, alpha=0.3)
+    else:
+        axs[1].text(0.5, 0.5, "No time course data available",
+                    ha='center', va='center', transform=axs[1].transAxes)
+        axs[1].set_title(f"{feedback_type.value.upper()} Feedback Field - Time Course")
+
     plt.tight_layout()
-    
+
     if save_path:
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
         print(f"   💾 Saved plot to {save_path}")
-    
+
     plt.show()
 
 
@@ -413,12 +376,14 @@ if __name__ == "__main__":
     
     user_commands = [
         # "Skip gym on Mondays",
-        "I won't go to the gym anymore",
+        # "I won't go to the gym anymore",
+        "I won't go for coffee anymore",
         # "I go to gym before work now",
         # "I arrive at work earlier now",
         # "I arrive at work later now",
         # "I arrive at the gym later now",
         # "Swap order of work and gym",
+        # "I need the time of going to work not to change.",
     ]
     
     # ========================================================================
@@ -467,6 +432,7 @@ if __name__ == "__main__":
         
         # Run feedback field dynamics
         print(f"\n⚙️  Running feedback field dynamics...")
+        ff_history = []
         for i in range(len(t_feedback)):
             if i == trigger_step:
                 ff.inject(center=destination_center, amplitude=3.0, width=5.0, current_step=i)
@@ -482,6 +448,12 @@ if __name__ == "__main__":
                 
                 conv_ff = compute_convolution(field.u, field.params.theta, field.w_hat)
                 field.u += (dt / field.params.tau) * (-field.u + conv_ff + field.h + field.s)
+
+            # Record this command's feedback field activation at each destination
+            ff_history.append([ff.u[idx] for idx in destination_indices])
+
+        ff_history = np.array(ff_history)
+        ff_timesteps = t_feedback[:len(ff_history)]
         
         # Apply correction to memory
         print(f"✏️  Applying correction to memory...")
@@ -539,6 +511,8 @@ if __name__ == "__main__":
             ff=ff,
             feedback_type=feedback_type,
             destination_name=destination_name,
+            ff_history=ff_history,
+            ff_timesteps=ff_timesteps,
             target_name=target_name,
             save_path=save_path
         )
@@ -548,28 +522,6 @@ if __name__ == "__main__":
 
         np.save(results_dir / f"u_dest_memory_cmd{cmd_idx+1}_{timestamp}.npy", u_dest_memory)
         np.save(results_dir / f"h_dmem_mask_cmd{cmd_idx+1}_{timestamp}.npy", h_dmem_mask)
-        
-        # # Show memory changes
-        # print(f"\n📊 Memory changes:")
-        # for i, (dest_name, dest_pos) in enumerate(zip(destination_names, destination_positions)):
-        #     idx = destination_indices[i]
-        #     amp_before = u_dest_memory_before[idx]
-        #     amp_after = u_dest_memory[idx]
-        #     change = amp_after - amp_before
-            
-        #     if abs(change) > 1e-6:
-        #         print(f"   {dest_name:8s}: {amp_before:.3f} → {amp_after:.3f} (Δ {change:+.3f}) ⚠️")
-        #     else:
-        #         print(f"   {dest_name:8s}: {amp_before:.3f} → {amp_after:.3f} (Δ {change:+.3f})")
-
-
-
-        
-        
-        # # Save state
-        # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # np.save(results_dir / f"u_dest_memory_cmd{cmd_idx+1}_{timestamp}.npy", u_dest_memory)
-        # np.save(results_dir / f"h_dmem_mask_cmd{cmd_idx+1}_{timestamp}.npy", h_dmem_mask)
     
     # Final summary
     print(f"\n{'='*70}")
